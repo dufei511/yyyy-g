@@ -1,19 +1,44 @@
 export default {
   async fetch(request, env, ctx) {
-    // 从环境变量获取基础 URL
-    const apiBase = env.SHORTEN_API_BASE || "";
-    // 注入到前端占位符
+    const url = new URL(request.url);
+    const apiBase = (env.SHORTEN_API_BASE || "https://sublink.yubb.pp.ua").replace(/\/+$/, '');
+
+    // --- 代理接口：解决浏览器跨域问题 ---
+    if (url.pathname === "/api/shorten") {
+      const targetUrl = url.searchParams.get("url");
+      const shortCode = url.searchParams.get("shortCode");
+      
+      if (!targetUrl || !shortCode) {
+        return new Response("Missing parameters", { status: 400 });
+      }
+
+      // 在服务器端请求后端 API
+      const realApiUrl = apiBase + "/shorten-v2?url=" + encodeURIComponent(targetUrl) + "&shortCode=" + shortCode;
+      
+      try {
+        const response = await fetch(realApiUrl);
+        const data = await response.text();
+        return new Response(data, {
+          headers: { 
+            "content-type": "text/plain;charset=UTF-8",
+            "Access-Control-Allow-Origin": "*" // 允许你自己的前端读取结果
+          }
+        });
+      } catch (e) {
+        return new Response("Proxy Error: " + e.message, { status: 500 });
+      }
+    }
+
+    // --- 注入逻辑：把 API 地址传给前端显示链接用 ---
     const finalHtml = HTML_CONTENT.replace(
       'const API_BASE_PLACEHOLDER = "";',
       'const API_BASE_PLACEHOLDER = "' + apiBase + '";'
     );
 
     return new Response(finalHtml, {
-      headers: {
-        'content-type': 'text/html;charset=UTF-8',
-      },
+      headers: { 'content-type': 'text/html;charset=UTF-8' }
     });
-  },
+  }
 };
 
 const HTML_CONTENT = `<!DOCTYPE html>
@@ -86,17 +111,6 @@ const HTML_CONTENT = `<!DOCTYPE html>
             const [copyFeedback, setCopyFeedback] = useState('');
             const [usePresetDomains, setUsePresetDomains] = useState(false);
 
-            const addDomainInput = () => setDomains([...domains, '']);
-            const removeDomainInput = (index) => {
-                const newDomains = domains.filter((_, i) => i !== index);
-                setDomains(newDomains.length ? newDomains : ['']);
-            };
-            const updateDomain = (index, value) => {
-                const newDomains = [...domains];
-                newDomains[index] = value;
-                setDomains(newDomains);
-            };
-
             const decodeVmess = (vmessUrl) => {
                 try {
                     const base64Part = vmessUrl.replace('vmess://', '').trim();
@@ -145,20 +159,18 @@ const HTML_CONTENT = `<!DOCTYPE html>
                     });
                     setGeneratedNodes(nodes);
 
-                    const apiBase = API_BASE_PLACEHOLDER.replace(/\\/+$/, '');
-                    const allVmess = nodes.map(n => n.vmess).join('\\n');
-                    const encodedVmess = encodeURIComponent(allVmess);
-                    const longUrl = apiBase + '/singbox?config=' + encodedVmess + '&ua=&selectedRules=%22comprehensive%22&customRules=%5B%5D';
-                    
+                    // --- 关键修改：请求自己 Worker 内部的代理接口，彻底解决跨域 ---
                     const uuid = self.crypto.randomUUID();
-                    const apiEndpoint = apiBase + '/shorten-v2?url=' + encodeURIComponent(longUrl) + '&shortCode=' + uuid;
+                    const longUrl = API_BASE_PLACEHOLDER + '/singbox?config=' + encodeURIComponent(nodes.map(n => n.vmess).join('\\n')) + '&ua=&selectedRules=%22comprehensive%22&customRules=%5B%5D';
                     
-                    const response = await fetch(apiEndpoint);
+                    const proxyUrl = "/api/shorten?url=" + encodeURIComponent(longUrl) + "&shortCode=" + uuid;
+                    
+                    const response = await fetch(proxyUrl);
                     if (response.ok) {
-                        setShortUrl(apiBase + '/s/' + uuid);
+                        setShortUrl(API_BASE_PLACEHOLDER + '/s/' + uuid);
                         setCopyFeedback('订阅地址已就绪');
                     } else {
-                        throw new Error('短链接转换接口返回错误');
+                        throw new Error('代理接口请求失败');
                     }
                 } catch (e) {
                     setError('生成失败: ' + e.message);
@@ -200,7 +212,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
                                         {usePresetDomains ? '✓ 已用内置' : '⚡ 使用内置'}
                                     </button>
                                     {!usePresetDomains && (
-                                        <button onClick={addDomainInput} className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-200 transition-all text-sm font-bold border border-gray-200">
+                                        <button onClick={() => setDomains([...domains, ''])} className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-200 transition-all text-sm font-bold border border-gray-200">
                                             <Plus className="w-4 h-4" /> 添加
                                         </button>
                                     )}
@@ -217,12 +229,16 @@ const HTML_CONTENT = `<!DOCTYPE html>
                                             <input
                                                 type="text"
                                                 value={domain}
-                                                onChange={(e) => updateDomain(index, e.target.value)}
+                                                onChange={(e) => {
+                                                    const d = [...domains];
+                                                    d[index] = e.target.value;
+                                                    setDomains(d);
+                                                }}
                                                 placeholder="例如: mfa.gov.ua"
                                                 className="flex-1 px-4 py-2.5 border-2 border-gray-50 rounded-xl focus:border-indigo-500 focus:outline-none transition-all"
                                             />
                                             {domains.length > 1 && (
-                                                <button onClick={() => removeDomainInput(index)} className="px-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors border border-red-100"><X className="w-5 h-5" /></button>
+                                                <button onClick={() => setDomains(domains.filter((_, i) => i !== index))} className="px-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors border border-red-100"><X className="w-5 h-5" /></button>
                                             )}
                                         </div>
                                     ))}
@@ -257,7 +273,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
                                         {shortUrl}
                                     </div>
                                     <p className="text-xs mt-4 text-indigo-100 font-medium">
-                                        该链接已根据环境变量配置，自动对接后端转换服务。
+                                        该请求通过 Worker 代理转发，已成功解决跨域限制。
                                     </p>
                                 </div>
                                 <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
