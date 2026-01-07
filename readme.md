@@ -32,7 +32,7 @@
 
 | 变量名 | 示例值 | 描述 |
 | :--- | :--- | :--- |
-| `SHORTEN_API_BASE` | `https://sublink.yubb.pp.ua` | 短链接转换后端的 API 基础地址 |
+| `SHORTEN_API_BASE` | `https://xxxx.pp.ua` | 短链接转换后端的 API 基础地址 |
 
 ## 📖 使用指南
 
