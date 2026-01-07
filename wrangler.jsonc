@@ -6,6 +6,6 @@
     "enabled": true
   },
   "vars": {
-    "SHORTEN_API_BASE": "https://sublink.yubb.pp.ua"
+    "SHORTEN_API_BASE": "https://xxxx.pp.ua"
   }
 }
