@@ -6,6 +6,6 @@
     "enabled": true
   },
   "vars": {
-    "SHORTEN_API_BASE": "https://xxxx.pp.ua"
+    "SHORTEN_API_BASE": "https://xxxxx.pp.ua"
   }
 }
