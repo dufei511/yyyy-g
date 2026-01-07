@@ -7,12 +7,8 @@ export default {
     if (url.pathname === "/api/shorten") {
       const targetUrl = url.searchParams.get("url");
       const shortCode = url.searchParams.get("shortCode");
-      
-      if (!targetUrl || !shortCode) {
-        return new Response("Missing parameters", { status: 400 });
-      }
+      if (!targetUrl || !shortCode) return new Response("Missing params", { status: 400 });
 
-      // 在服务器端请求后端 API
       const realApiUrl = apiBase + "/shorten-v2?url=" + encodeURIComponent(targetUrl) + "&shortCode=" + shortCode;
       
       try {
@@ -21,15 +17,15 @@ export default {
         return new Response(data, {
           headers: { 
             "content-type": "text/plain;charset=UTF-8",
-            "Access-Control-Allow-Origin": "*" // 允许你自己的前端读取结果
+            "Access-Control-Allow-Origin": "*" 
           }
         });
       } catch (e) {
-        return new Response("Proxy Error: " + e.message, { status: 500 });
+        return new Response("Proxy Error", { status: 500 });
       }
     }
 
-    // --- 注入逻辑：把 API 地址传给前端显示链接用 ---
+    // --- 注入逻辑 ---
     const finalHtml = HTML_CONTENT.replace(
       'const API_BASE_PLACEHOLDER = "";',
       'const API_BASE_PLACEHOLDER = "' + apiBase + '";'
@@ -66,32 +62,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
         const API_BASE_PLACEHOLDER = "";
         const { useState } = React;
 
-        const Copy = ({ className = "w-5 h-5" }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        const CopyIcon = () => (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-        );
-
-        const Plus = ({ className = "w-5 h-5" }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-        );
-
-        const X = ({ className = "w-5 h-5" }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-        );
-
-        const Sparkles = ({ className = "w-8 h-8" }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M12 3L13.5 7.5L18 9L13.5 10.5L12 15L10.5 10.5L6 9L10.5 7.5L12 3Z"></path>
-                <path d="M19 12L19.5 13.5L21 14L19.5 14.5L19 16L18.5 14.5L17 14L18.5 13.5L19 12Z"></path>
-                <path d="M6 19L6.5 20.5L8 21L6.5 21.5L6 23L5.5 21.5L4 21L5.5 20.5L6 19Z"></path>
             </svg>
         );
 
@@ -105,26 +79,15 @@ const HTML_CONTENT = `<!DOCTYPE html>
             const [originalVmess, setOriginalVmess] = useState('');
             const [domains, setDomains] = useState(['']);
             const [generatedNodes, setGeneratedNodes] = useState([]);
-            const [shortUrl, setShortUrl] = useState('');
+            const [shortUuid, setShortUuid] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
             const [error, setError] = useState('');
             const [copyFeedback, setCopyFeedback] = useState('');
             const [usePresetDomains, setUsePresetDomains] = useState(false);
 
-            const decodeVmess = (vmessUrl) => {
-                try {
-                    const base64Part = vmessUrl.replace('vmess://', '').trim();
-                    const decoded = atob(base64Part);
-                    return JSON.parse(decoded);
-                } catch (e) {
-                    throw new Error('无效的 VMess 链接格式');
-                }
-            };
-
             const encodeVmess = (config) => {
                 const json = JSON.stringify(config);
-                const base64 = btoa(unescape(encodeURIComponent(json)));
-                return "vmess://" + base64;
+                return "vmess://" + btoa(unescape(encodeURIComponent(json)));
             };
 
             const copyToClipboard = (text, feedback = '已复制') => {
@@ -136,41 +99,30 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
             const generateAndShorten = async () => {
                 setError('');
-                setGeneratedNodes([]);
-                setShortUrl('');
-                if (!originalVmess.trim()) {
-                    setError('请输入原始 VMess 节点');
-                    return;
-                }
+                setShortUuid('');
+                if (!originalVmess.trim()) return setError('请输入原始节点');
                 const validDomains = usePresetDomains ? PRESET_DOMAINS : domains.filter(d => d.trim());
-                if (validDomains.length === 0) {
-                    setError('请提供至少一个优选域名');
-                    return;
-                }
+                
                 setIsGenerating(true);
                 try {
-                    const config = decodeVmess(originalVmess);
+                    const b64 = originalVmess.replace('vmess://', '').trim();
+                    const config = JSON.parse(atob(b64));
+                    
                     const nodes = validDomains.map(domain => {
-                        const newConfig = { ...config };
-                        const cleanDomain = domain.trim();
-                        newConfig.add = cleanDomain;
-                        newConfig.ps = (config.ps || '节点') + ' - ' + cleanDomain;
-                        return { domain: cleanDomain, vmess: encodeVmess(newConfig) };
+                        const newConfig = { ...config, add: domain.trim(), ps: (config.ps || '节点') + ' - ' + domain.trim() };
+                        return { domain: domain.trim(), vmess: encodeVmess(newConfig) };
                     });
                     setGeneratedNodes(nodes);
 
-                    // --- 关键修改：请求自己 Worker 内部的代理接口，彻底解决跨域 ---
                     const uuid = self.crypto.randomUUID();
                     const longUrl = API_BASE_PLACEHOLDER + '/singbox?config=' + encodeURIComponent(nodes.map(n => n.vmess).join('\\n')) + '&ua=&selectedRules=%22comprehensive%22&customRules=%5B%5D';
                     
-                    const proxyUrl = "/api/shorten?url=" + encodeURIComponent(longUrl) + "&shortCode=" + uuid;
-                    
-                    const response = await fetch(proxyUrl);
+                    const response = await fetch("/api/shorten?url=" + encodeURIComponent(longUrl) + "&shortCode=" + uuid);
                     if (response.ok) {
-                        setShortUrl(API_BASE_PLACEHOLDER + '/s/' + uuid);
-                        setCopyFeedback('订阅地址已就绪');
+                        setShortUuid(uuid);
+                        setCopyFeedback('所有订阅已生成！');
                     } else {
-                        throw new Error('代理接口请求失败');
+                        throw new Error('转换失败');
                     }
                 } catch (e) {
                     setError('生成失败: ' + e.message);
@@ -179,117 +131,78 @@ const HTML_CONTENT = `<!DOCTYPE html>
                 }
             };
 
+            const subscriptionTypes = [
+                { name: 'Xray Link', path: '/x/' },
+                { name: 'SingBox Link', path: '/b/' },
+                { name: 'Clash Link', path: '/c/' },
+                { name: 'Surge Link', path: '/s/' }
+            ];
+
             return (
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 pb-20">
+                <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-100 p-4 pb-20 font-sans">
                     <div className="max-w-4xl mx-auto">
-                        <div className="text-center mb-8 pt-8">
-                            <div className="flex items-center justify-center gap-2 mb-2">
-                                <Sparkles className="w-8 h-8 text-indigo-600" />
-                                <h1 className="text-4xl font-bold text-gray-800 tracking-tight">VMess 订阅生成器 Pro</h1>
-                            </div>
-                            <p className="text-gray-600">批量生成优选节点并自动转换 Sing-box 短链接订阅</p>
+                        <div className="text-center py-10">
+                            <h1 className="text-4xl font-black text-indigo-900 mb-2">VMess 订阅生成器 Pro</h1>
+                            <p className="text-slate-500 font-medium">多协议支持 · 优选域名 · 自动短链</p>
                         </div>
+
                         {copyFeedback && (
-                            <div className="fixed top-6 right-6 bg-green-500 text-white px-6 py-3 rounded-2xl shadow-2xl z-50 animate-bounce">
+                            <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-8 py-3 rounded-full shadow-2xl z-50 animate-bounce font-bold">
                                 {copyFeedback}
                             </div>
                         )}
-                        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
-                            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">原始 VMess 节点</label>
+
+                        <div className="bg-white rounded-3xl shadow-xl p-6 mb-6">
                             <textarea
                                 value={originalVmess}
                                 onChange={(e) => setOriginalVmess(e.target.value)}
-                                placeholder="粘贴 vmess:// 链接..."
-                                className="w-full h-28 px-4 py-3 border-2 border-gray-100 rounded-xl focus:border-indigo-500 focus:outline-none transition-all resize-none font-mono text-sm bg-gray-50"
+                                placeholder="在此粘贴 vmess:// 原始节点"
+                                className="w-full h-28 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
                             />
                         </div>
-                        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
-                            <div className="flex items-center justify-between mb-4">
-                                <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">优选域名配置</label>
-                                <div className="flex gap-2">
-                                    <button onClick={() => { setUsePresetDomains(!usePresetDomains); if(!usePresetDomains) setDomains(['']); }}
-                                            className={"px-3 py-1.5 rounded-lg text-sm font-bold transition-all " + (usePresetDomains ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100')}>
-                                        {usePresetDomains ? '✓ 已用内置' : '⚡ 使用内置'}
-                                    </button>
-                                    {!usePresetDomains && (
-                                        <button onClick={() => setDomains([...domains, ''])} className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-200 transition-all text-sm font-bold border border-gray-200">
-                                            <Plus className="w-4 h-4" /> 添加
-                                        </button>
-                                    )}
-                                </div>
+
+                        <div className="bg-white rounded-3xl shadow-xl p-6 mb-8">
+                            <div className="flex justify-between items-center mb-4">
+                                <span className="font-bold text-slate-700">优选域名</span>
+                                <button onClick={() => setUsePresetDomains(!usePresetDomains)} className="text-sm font-bold text-indigo-600 px-4 py-2 bg-indigo-50 rounded-xl hover:bg-indigo-100">
+                                    {usePresetDomains ? '使用自定义' : '使用内置列表'}
+                                </button>
                             </div>
-                            {usePresetDomains ? (
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                                    {PRESET_DOMAINS.map((d, i) => <div key={i} className="bg-white px-3 py-2 rounded-lg text-xs font-mono text-gray-600 border border-indigo-100 text-center">{d}</div>)}
-                                </div>
-                            ) : (
+                            {!usePresetDomains && (
                                 <div className="space-y-3">
-                                    {domains.map((domain, index) => (
-                                        <div key={index} className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                value={domain}
-                                                onChange={(e) => {
-                                                    const d = [...domains];
-                                                    d[index] = e.target.value;
-                                                    setDomains(d);
-                                                }}
-                                                placeholder="例如: mfa.gov.ua"
-                                                className="flex-1 px-4 py-2.5 border-2 border-gray-50 rounded-xl focus:border-indigo-500 focus:outline-none transition-all"
-                                            />
-                                            {domains.length > 1 && (
-                                                <button onClick={() => setDomains(domains.filter((_, i) => i !== index))} className="px-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors border border-red-100"><X className="w-5 h-5" /></button>
-                                            )}
+                                    {domains.map((d, i) => (
+                                        <div key={i} className="flex gap-2">
+                                            <input value={d} onChange={(e) => { const nd = [...domains]; nd[i] = e.target.value; setDomains(nd); }} className="flex-1 p-3 bg-slate-50 rounded-xl border-2 border-slate-50 focus:border-indigo-400 focus:outline-none" placeholder="example.com" />
+                                            <button onClick={() => setDomains(domains.filter((_, idx) => idx !== i))} className="p-3 text-red-400 hover:bg-red-50 rounded-xl">✕</button>
                                         </div>
                                     ))}
+                                    <button onClick={() => setDomains([...domains, ''])} className="w-full py-3 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 font-bold hover:border-indigo-300 hover:text-indigo-400">+ 添加更多</button>
                                 </div>
                             )}
                         </div>
-                        {error && (
-                            <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-r-xl shadow-sm">
-                                <p className="text-sm font-bold">{error}</p>
-                            </div>
-                        )}
-                        <button
-                            onClick={generateAndShorten}
-                            disabled={isGenerating}
-                            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-xl hover:bg-indigo-700 transition-all shadow-lg hover:shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed mb-8"
-                        >
-                            {isGenerating ? '正在拼命生成中...' : '立即生成订阅地址'}
+
+                        <button onClick={generateAndShorten} disabled={isGenerating} className="w-full py-5 bg-indigo-600 text-white rounded-3xl font-black text-xl shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all mb-10">
+                            {isGenerating ? '正在同步云端数据...' : '立即生成 4 种订阅地址'}
                         </button>
-                        {shortUrl && (
-                            <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-3xl shadow-2xl p-8 mb-8 text-white animate-fade-in relative overflow-hidden">
-                                <div className="relative z-10">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h2 className="text-2xl font-black italic tracking-tighter uppercase">订阅地址已就绪</h2>
-                                        <button
-                                            onClick={() => copyToClipboard(shortUrl, '订阅链接已复制')}
-                                            className="bg-white text-indigo-600 px-6 py-2 rounded-full font-bold hover:bg-indigo-50 transition-colors shadow-lg"
-                                        >
-                                            复制链接
-                                        </button>
-                                    </div>
-                                    <div className="bg-black/20 p-4 rounded-2xl border border-white/20 break-all font-mono text-sm backdrop-blur-sm">
-                                        {shortUrl}
-                                    </div>
-                                    <p className="text-xs mt-4 text-indigo-100 font-medium">
-                                        该请求通过 Worker 代理转发，已成功解决跨域限制。
-                                    </p>
-                                </div>
-                                <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
-                            </div>
-                        )}
-                        {generatedNodes.length > 0 && (
-                            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-                                <h2 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">预览生成的节点 ({generatedNodes.length})</h2>
-                                <div className="space-y-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-                                    {generatedNodes.map((node, index) => (
-                                        <div key={index} className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex items-center justify-between">
-                                            <span className="text-xs font-mono font-bold text-indigo-600 truncate mr-4">{node.domain}</span>
-                                            <button onClick={() => copyToClipboard(node.vmess, '节点已复制')} className="text-gray-400 hover:text-indigo-600"><Copy className="w-4 h-4" /></button>
+
+                        {shortUuid && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+                                {subscriptionTypes.map((type) => (
+                                    <div key={type.name} className="bg-white p-6 rounded-3xl shadow-md border border-indigo-50 hover:border-indigo-200 transition-all group">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="text-sm font-black text-slate-400 uppercase tracking-widest">{type.name}</span>
+                                            <button 
+                                                onClick={() => copyToClipboard(API_BASE_PLACEHOLDER + type.path + shortUuid)}
+                                                className="p-2 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-all"
+                                            >
+                                                <CopyIcon />
+                                            </button>
                                         </div>
-                                    ))}
-                                </div>
+                                        <div className="text-sm font-mono text-slate-600 break-all bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                            {API_BASE_PLACEHOLDER}{type.path}{shortUuid}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>

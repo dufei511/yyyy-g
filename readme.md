@@ -2,6 +2,8 @@
 
 这是一个运行在 Cloudflare Workers 边缘网络上的轻量级工具。它能够将单个 VMess 节点扩展为多个使用优选域名的节点，并自动生成短链接订阅地址。
 
+示例网站：https://yyyy.220820.xyz
+
 ![React](https://img.shields.io/badge/Frontend-React_18-61DAFB?style=flat-square&logo=react)
 ![TailwindCSS](https://img.shields.io/badge/Style-Tailwind_CSS-38B2AC?style=flat-square&logo=tailwind-css)
 ![Cloudflare](https://img.shields.io/badge/Platform-Cloudflare_Workers-F38020?style=flat-square&logo=cloudflare)
