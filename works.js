@@ -83,7 +83,8 @@ const HTML_CONTENT = `<!DOCTYPE html>
             const [isGenerating, setIsGenerating] = useState(false);
             const [error, setError] = useState('');
             const [copyFeedback, setCopyFeedback] = useState('');
-            const [usePresetDomains, setUsePresetDomains] = useState(false);
+            // --- 修改：默认开启内置域名 ---
+            const [usePresetDomains, setUsePresetDomains] = useState(true);
 
             const encodeVmess = (config) => {
                 const json = JSON.stringify(config);
@@ -102,6 +103,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
                 setShortUuid('');
                 if (!originalVmess.trim()) return setError('请输入原始节点');
                 const validDomains = usePresetDomains ? PRESET_DOMAINS : domains.filter(d => d.trim());
+                if (validDomains.length === 0) return setError('请提供至少一个域名');
                 
                 setIsGenerating(true);
                 try {
@@ -120,9 +122,9 @@ const HTML_CONTENT = `<!DOCTYPE html>
                     const response = await fetch("/api/shorten?url=" + encodeURIComponent(longUrl) + "&shortCode=" + uuid);
                     if (response.ok) {
                         setShortUuid(uuid);
-                        setCopyFeedback('所有订阅已生成！');
+                        setCopyFeedback('所有订阅已就绪！');
                     } else {
-                        throw new Error('转换失败');
+                        throw new Error('云端转换失败');
                     }
                 } catch (e) {
                     setError('生成失败: ' + e.message);
@@ -139,70 +141,92 @@ const HTML_CONTENT = `<!DOCTYPE html>
             ];
 
             return (
-                <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-100 p-4 pb-20 font-sans">
+                <div className="min-h-screen bg-slate-50 p-4 pb-20 font-sans">
                     <div className="max-w-4xl mx-auto">
                         <div className="text-center py-10">
-                            <h1 className="text-4xl font-black text-indigo-900 mb-2">VMess 订阅生成器 Pro</h1>
-                            <p className="text-slate-500 font-medium">多协议支持 · 优选域名 · 自动短链</p>
+                            <h1 className="text-4xl font-black text-slate-800 mb-2">VMess 订阅生成器 Pro</h1>
+                            <p className="text-slate-400">多协议支持 · 跨域代理 · 自动化部署</p>
                         </div>
 
                         {copyFeedback && (
-                            <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-8 py-3 rounded-full shadow-2xl z-50 animate-bounce font-bold">
+                            <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-8 py-3 rounded-full shadow-2xl z-50 animate-bounce font-bold">
                                 {copyFeedback}
                             </div>
                         )}
 
-                        <div className="bg-white rounded-3xl shadow-xl p-6 mb-6">
+                        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-6">
                             <textarea
                                 value={originalVmess}
                                 onChange={(e) => setOriginalVmess(e.target.value)}
                                 placeholder="在此粘贴 vmess:// 原始节点"
-                                className="w-full h-28 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
+                                className="w-full h-28 p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:border-slate-200 focus:outline-none transition-all font-mono text-sm"
                             />
                         </div>
 
-                        <div className="bg-white rounded-3xl shadow-xl p-6 mb-8">
-                            <div className="flex justify-between items-center mb-4">
-                                <span className="font-bold text-slate-700">优选域名</span>
-                                <button onClick={() => setUsePresetDomains(!usePresetDomains)} className="text-sm font-bold text-indigo-600 px-4 py-2 bg-indigo-50 rounded-xl hover:bg-indigo-100">
-                                    {usePresetDomains ? '使用自定义' : '使用内置列表'}
+                        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-8">
+                            <div className="flex justify-between items-center mb-6">
+                                <span className="font-bold text-slate-700 uppercase tracking-widest text-sm">优选域名配置</span>
+                                <button onClick={() => setUsePresetDomains(!usePresetDomains)} className="text-xs font-black uppercase tracking-widest text-indigo-600 px-4 py-2 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition-colors">
+                                    {usePresetDomains ? '切换自定义' : '使用内置列表'}
                                 </button>
                             </div>
-                            {!usePresetDomains && (
+
+                            {usePresetDomains ? (
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    {PRESET_DOMAINS.map((d, i) => (
+                                        <div key={i} className="bg-slate-50 px-3 py-2 rounded-xl text-xs font-mono text-slate-500 border border-slate-100 text-center uppercase tracking-tighter">
+                                            {d}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
                                 <div className="space-y-3">
                                     {domains.map((d, i) => (
                                         <div key={i} className="flex gap-2">
-                                            <input value={d} onChange={(e) => { const nd = [...domains]; nd[i] = e.target.value; setDomains(nd); }} className="flex-1 p-3 bg-slate-50 rounded-xl border-2 border-slate-50 focus:border-indigo-400 focus:outline-none" placeholder="example.com" />
-                                            <button onClick={() => setDomains(domains.filter((_, idx) => idx !== i))} className="p-3 text-red-400 hover:bg-red-50 rounded-xl">✕</button>
+                                            <input value={d} onChange={(e) => { const nd = [...domains]; nd[i] = e.target.value; setDomains(nd); }} className="flex-1 p-3 bg-slate-50 rounded-xl border-2 border-slate-50 focus:border-slate-200 focus:outline-none" placeholder="example.com" />
+                                            {domains.length > 1 && <button onClick={() => setDomains(domains.filter((_, idx) => idx !== i))} className="p-3 text-red-400 hover:bg-red-50 rounded-xl">✕</button>}
                                         </div>
                                     ))}
-                                    <button onClick={() => setDomains([...domains, ''])} className="w-full py-3 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 font-bold hover:border-indigo-300 hover:text-indigo-400">+ 添加更多</button>
+                                    <button onClick={() => setDomains([...domains, ''])} className="w-full py-3 border-2 border-dashed border-slate-100 rounded-xl text-slate-400 font-bold hover:bg-slate-50">+ 添加更多</button>
                                 </div>
                             )}
                         </div>
 
-                        <button onClick={generateAndShorten} disabled={isGenerating} className="w-full py-5 bg-indigo-600 text-white rounded-3xl font-black text-xl shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all mb-10">
-                            {isGenerating ? '正在同步云端数据...' : '立即生成 4 种订阅地址'}
+                        {error && <div className="bg-red-50 text-red-600 p-4 rounded-2xl mb-6 text-center font-bold">{error}</div>}
+
+                        <button onClick={generateAndShorten} disabled={isGenerating} className="w-full py-5 bg-indigo-600 text-white rounded-3xl font-black text-xl shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all mb-10 shadow-indigo-200">
+                            {isGenerating ? '正在请求边缘网络...' : '立即生成 4 种订阅地址'}
                         </button>
 
                         {shortUuid && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
-                                {subscriptionTypes.map((type) => (
-                                    <div key={type.name} className="bg-white p-6 rounded-3xl shadow-md border border-indigo-50 hover:border-indigo-200 transition-all group">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <span className="text-sm font-black text-slate-400 uppercase tracking-widest">{type.name}</span>
-                                            <button 
-                                                onClick={() => copyToClipboard(API_BASE_PLACEHOLDER + type.path + shortUuid)}
-                                                className="p-2 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-all"
-                                            >
-                                                <CopyIcon />
-                                            </button>
+                            <div className="space-y-6 animate-fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {subscriptionTypes.map((type) => (
+                                        <div key={type.name} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 group">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{type.name}</span>
+                                                <button onClick={() => copyToClipboard(API_BASE_PLACEHOLDER + type.path + shortUuid)} className="p-2 bg-slate-50 text-slate-400 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                                                    <CopyIcon />
+                                                </button>
+                                            </div>
+                                            <div className="text-xs font-mono text-slate-400 break-all bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                {API_BASE_PLACEHOLDER}{type.path}{shortUuid}
+                                            </div>
                                         </div>
-                                        <div className="text-sm font-mono text-slate-600 break-all bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                            {API_BASE_PLACEHOLDER}{type.path}{shortUuid}
-                                        </div>
+                                    ))}
+                                </div>
+                                
+                                <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
+                                    <h2 className="text-sm font-black text-slate-700 mb-4 border-b pb-2 uppercase tracking-widest">节点预览 ({generatedNodes.length})</h2>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar font-mono text-[10px]">
+                                        {generatedNodes.map((node, index) => (
+                                            <div key={index} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg border border-slate-100">
+                                                <span className="text-slate-500 truncate mr-4 italic">{node.domain}</span>
+                                                <button onClick={() => copyToClipboard(node.vmess)} className="text-slate-300 hover:text-indigo-600"><CopyIcon /></button>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                </div>
                             </div>
                         )}
                     </div>
