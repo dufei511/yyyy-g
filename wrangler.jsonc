@@ -1,0 +1,11 @@
+{
+  "name": "yyyy-generator",
+  "main": "works.js",
+  "compatibility_date": "2025-12-25",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "SHORTEN_API_BASE": "https://sublink.yubb.pp.ua"
+  }
+}
