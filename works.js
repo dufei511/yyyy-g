@@ -102,21 +102,15 @@ function countryCodeToFlag(code) {
   return String.fromCodePoint(...chars);
 }
 
-// 批量查询域名国家，返回 { domain: flagEmoji } 映射
-async function fetchDomainFlags(domains) {
-  const results = {};
-  await Promise.all(
-    domains.map(async (domain) => {
-      try {
-        const res = await fetch('/api/geoip?host=' + encodeURIComponent(domain));
-        const data = await res.json();
-        results[domain] = countryCodeToFlag(data.countryCode || '');
-      } catch {
-        results[domain] = '🌐';
-      }
-    })
-  );
-  return results;
+// 查询原始节点 IP/域名所在国家，返回国旗 emoji（所有优选节点共用同一个国旗）
+async function fetchOriginFlag(host) {
+  try {
+    const res = await fetch('/api/geoip?host=' + encodeURIComponent(host));
+    const data = await res.json();
+    return countryCodeToFlag(data.countryCode || '');
+  } catch {
+    return '🌐';
+  }
 }
 
 function VmessGenerator() {
@@ -158,12 +152,11 @@ function VmessGenerator() {
       const b64 = originalVmess.replace('vmess://', '').trim();
       const config = JSON.parse(atob(b64));
 
-      // 先批量获取国旗
-      const flagMap = await fetchDomainFlags(validDomains);
+      // 查询原始节点 IP/域名所在国家（所有优选节点共用同一国旗）
+      const flag = await fetchOriginFlag(config.add);
 
-      // 节点名称 = 国旗 + 优选域名（不再沿用原始 ps）
+      // 节点名称 = 原始节点国旗 + 优选域名（所有节点共用同一国旗）
       const nodes = validDomains.map(domain => {
-        const flag = flagMap[domain] || '🌐';
         const newConfig = { ...config, add: domain.trim(), ps: flag + ' ' + domain.trim() };
         return { domain: domain.trim(), flag, vmess: encodeVmess(newConfig) };
       });
