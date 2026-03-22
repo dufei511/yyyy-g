@@ -23,26 +23,6 @@ export default {
       }
     }
 
-    // --- 新增：IP 地理位置查询代理接口（解决前端跨域） ---
-    if (url.pathname === "/api/geoip") {
-      const host = url.searchParams.get("host");
-      if (!host) return new Response(JSON.stringify({ countryCode: "" }), { headers: { "content-type": "application/json", "Access-Control-Allow-Origin": "*" } });
-      try {
-        const res = await fetch(`http://ip-api.com/json/${encodeURIComponent(host)}?fields=countryCode`);
-        const data = await res.text();
-        return new Response(data, {
-          headers: {
-            "content-type": "application/json;charset=UTF-8",
-            "Access-Control-Allow-Origin": "*"
-          }
-        });
-      } catch (e) {
-        return new Response(JSON.stringify({ countryCode: "" }), {
-          headers: { "content-type": "application/json", "Access-Control-Allow-Origin": "*" }
-        });
-      }
-    }
-
     // --- 注入逻辑 ---
     const finalHtml = HTML_CONTENT.replace(
       'const API_BASE_PLACEHOLDER = "";',
@@ -95,23 +75,38 @@ const PRESET_DOMAINS = [
   'cdns.doon.eu.org', 'sub.danfeng.eu.org', 'cf.zhetengsha.eu.org'
 ];
 
-// 国家代码 → 国旗 emoji
-function countryCodeToFlag(code) {
-  if (!code || code.length !== 2) return '🌐';
-  const chars = code.toUpperCase().split('').map(c => 0x1F1E6 + c.charCodeAt(0) - 65);
-  return String.fromCodePoint(...chars);
-}
-
-// 查询原始节点 IP/域名所在国家，返回国旗 emoji（所有优选节点共用同一个国旗）
-async function fetchOriginFlag(host) {
-  try {
-    const res = await fetch('/api/geoip?host=' + encodeURIComponent(host));
-    const data = await res.json();
-    return countryCodeToFlag(data.countryCode || '');
-  } catch {
-    return '🌐';
-  }
-}
+const COUNTRY_LIST = [
+  { flag: '🇭🇰', name: '香港' },
+  { flag: '🇯🇵', name: '日本' },
+  { flag: '🇸🇬', name: '新加坡' },
+  { flag: '🇺🇸', name: '美国' },
+  { flag: '🇬🇧', name: '英国' },
+  { flag: '🇩🇪', name: '德国' },
+  { flag: '🇫🇷', name: '法国' },
+  { flag: '🇳🇱', name: '荷兰' },
+  { flag: '🇨🇦', name: '加拿大' },
+  { flag: '🇦🇺', name: '澳大利亚' },
+  { flag: '🇰🇷', name: '韩国' },
+  { flag: '🇹🇼', name: '台湾' },
+  { flag: '🇷🇺', name: '俄罗斯' },
+  { flag: '🇹🇷', name: '土耳其' },
+  { flag: '🇧🇷', name: '巴西' },
+  { flag: '🇦🇷', name: '阿根廷' },
+  { flag: '🇮🇳', name: '印度' },
+  { flag: '🇮🇩', name: '印尼' },
+  { flag: '🇵🇭', name: '菲律宾' },
+  { flag: '🇹🇭', name: '泰国' },
+  { flag: '🇻🇳', name: '越南' },
+  { flag: '🇲🇾', name: '马来西亚' },
+  { flag: '🇺🇦', name: '乌克兰' },
+  { flag: '🇵🇱', name: '波兰' },
+  { flag: '🇨🇭', name: '瑞士' },
+  { flag: '🇸🇪', name: '瑞典' },
+  { flag: '🇳🇴', name: '挪威' },
+  { flag: '🇫🇮', name: '芬兰' },
+  { flag: '🇿🇦', name: '南非' },
+  { flag: '🌐', name: '未知' },
+];
 
 function VmessGenerator() {
   const [originalVmess, setOriginalVmess] = useState('');
@@ -122,6 +117,8 @@ function VmessGenerator() {
   const [error, setError] = useState('');
   const [copyFeedback, setCopyFeedback] = useState('');
   const [usePresetDomains, setUsePresetDomains] = useState(true);
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRY_LIST[0]);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
 
   const encodeVmess = (config) => {
     const json = JSON.stringify(config);
@@ -152,13 +149,11 @@ function VmessGenerator() {
       const b64 = originalVmess.replace('vmess://', '').trim();
       const config = JSON.parse(atob(b64));
 
-      // 查询原始节点 IP/域名所在国家（所有优选节点共用同一国旗）
-      const flag = await fetchOriginFlag(config.add);
-
-      // 节点名称 = 原始节点国旗 + 优选域名（所有节点共用同一国旗）
+      // 节点名称 = 所选国旗 + 优选域名
       const nodes = validDomains.map(domain => {
-        const newConfig = { ...config, add: domain.trim(), ps: flag + ' ' + domain.trim() };
-        return { domain: domain.trim(), flag, vmess: encodeVmess(newConfig) };
+        const ps = selectedCountry.flag + ' ' + domain.trim();
+        const newConfig = { ...config, add: domain.trim(), ps };
+        return { domain: domain.trim(), ps, vmess: encodeVmess(newConfig) };
       });
 
       setGeneratedNodes(nodes);
@@ -188,10 +183,10 @@ function VmessGenerator() {
   };
 
   const subscriptionTypes = [
-    { name: 'Xray Link',   path: '/x/' },
+    { name: 'Xray Link',    path: '/x/' },
     { name: 'SingBox Link', path: '/b/' },
-    { name: 'Clash Link',  path: '/c/' },
-    { name: 'Surge Link',  path: '/s/' }
+    { name: 'Clash Link',   path: '/c/' },
+    { name: 'Surge Link',   path: '/s/' }
   ];
 
   return (
@@ -209,6 +204,7 @@ function VmessGenerator() {
           </div>
         )}
 
+        {/* 原始节点输入 */}
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-6">
           <textarea
             value={originalVmess}
@@ -218,6 +214,41 @@ function VmessGenerator() {
           />
         </div>
 
+        {/* 国家选择 */}
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <span className="font-bold text-slate-700 uppercase tracking-widest text-sm">节点归属地</span>
+            <span className="text-xs text-slate-400">国旗将拼接在节点名称前</span>
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowCountryPicker(!showCountryPicker)}
+              className="w-full flex items-center gap-3 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl hover:border-indigo-200 transition-colors text-left"
+            >
+              <span className="text-2xl">{selectedCountry.flag}</span>
+              <span className="font-bold text-slate-700">{selectedCountry.name}</span>
+              <span className="ml-auto text-slate-400 text-xs font-mono">预览：{selectedCountry.flag} cf.130519.xyz</span>
+              <span className="text-slate-300 ml-2">▾</span>
+            </button>
+
+            {showCountryPicker && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-10 max-h-64 overflow-y-auto custom-scrollbar">
+                {COUNTRY_LIST.map((c) => (
+                  <button
+                    key={c.name}
+                    onClick={() => { setSelectedCountry(c); setShowCountryPicker(false); }}
+                    className={"w-full flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 transition-colors text-left" + (selectedCountry.name === c.name ? ' bg-indigo-50' : '')}
+                  >
+                    <span className="text-xl">{c.flag}</span>
+                    <span className="text-sm text-slate-600">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 优选域名配置 */}
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-8">
           <div className="flex justify-between items-center mb-6">
             <span className="font-bold text-slate-700 uppercase tracking-widest text-sm">优选域名配置</span>
@@ -268,7 +299,7 @@ function VmessGenerator() {
           disabled={isGenerating}
           className="w-full py-5 bg-indigo-600 text-white rounded-3xl font-black text-xl shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all mb-10 shadow-indigo-200"
         >
-          {isGenerating ? '正在检测节点地区并生成...' : '立即生成 4 种订阅地址'}
+          {isGenerating ? '正在生成订阅...' : '立即生成 4 种订阅地址'}
         </button>
 
         {shortUuid && (
@@ -299,10 +330,7 @@ function VmessGenerator() {
               <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar font-mono text-[10px]">
                 {generatedNodes.map((node, index) => (
                   <div key={index} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg border border-slate-100">
-                    <span className="text-slate-600 truncate mr-4">
-                      <span className="mr-1">{node.flag}</span>
-                      <span className="text-slate-400 italic">{node.domain}</span>
-                    </span>
+                    <span className="text-slate-600 truncate mr-4 italic">{node.ps}</span>
                     <button onClick={() => copyToClipboard(node.vmess)} className="text-slate-300 hover:text-indigo-600">
                       <CopyIcon />
                     </button>
